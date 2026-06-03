@@ -140,7 +140,7 @@ curl -X POST http://80.78.245.35:8000/api/v1/predict/upload \
 ## Деплой через Docker
 
 ```bash
-git clone https://github.com/WorDem125/airsoft-ml-api.git
+git clone https://github.com/Stasian-23/airsoft-ml-api.git
 cd airsoft-ml-api
 
 cp .env.example .env
