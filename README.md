@@ -1,8 +1,19 @@
-# Airsoft ML API v2
+# Airsoft ML API
 
 API машинного обучения для автоматической классификации товаров страйкбольного маркетплейса.
 Определяет категорию и подкатегорию каждого товара по тексту объявления и фотографиям.
 Поддерживает многообъектные объявления — одно объявление может содержать несколько товаров.
+
+---
+
+## Задеплоено
+
+| | |
+|---|---|
+| **Сервер** | `80.78.245.35:8000` |
+| **Swagger** | http://80.78.245.35:8000/docs |
+| **Health** | http://80.78.245.35:8000/api/v1/health |
+| **API ключ** | `Ch6xpfdnTTuYiiJtFognocrHHfXg4bYqsTDGmofMfog` |
 
 ---
 
@@ -29,8 +40,9 @@ API машинного обучения для автоматической кл
 ## Модели
 
 ### Классификатор изображений — EfficientNet-B0
-- Предобучен на ImageNet, дообучен на датасете страйкбольных фотографий
-- 11 классов (подкатегории): ak, HK, M serias, mashinegun, pistol, rifle, shutgun, vest, helmet, pouch, backpack
+- Предобучен на ImageNet, дообучен на датасете страйкбольных фотографий (921 изображение)
+- 11 классов: `ak`, `HK`, `M serias`, `mashinegun`, `pistol`, `rifle`, `shutgun`, `vest`, `helmet`, `pouch`, `backpack`
+- Обучение: 9 эпох, val_acc = **78.9%**
 - Инференс на CPU: ~150–300 мс
 
 ### Классификатор текста — rubert-tiny2
@@ -57,7 +69,33 @@ API машинного обучения для автоматической кл
 X-API-Key: ваш_ключ
 ```
 
-### Формат запроса (POST /api/v1/predict)
+В Swagger (`/docs`) — кнопка **Authorize** (замок вверху справа).
+
+Сгенерировать новый ключ:
+```bash
+python scripts/generate_api_key.py
+```
+
+### Формат запроса — POST /api/v1/predict/upload (multipart)
+
+```
+post_id   string        — ID объявления
+text      string        — текст объявления
+photo_1   file          — первое фото (опционально)
+photo_2   file          — второе фото (опционально)
+photo_3   file          — третье фото (опционально)
+```
+
+Пример curl:
+```bash
+curl -X POST http://80.78.245.35:8000/api/v1/predict/upload \
+  -H "X-API-Key: Ch6xpfdnTTuYiiJtFognocrHHfXg4bYqsTDGmofMfog" \
+  -F "post_id=1" \
+  -F "text=АК-74М страйкбольный, металл. 8000р" \
+  -F "photo_1=@/path/to/photo.jpg"
+```
+
+### Формат запроса — POST /api/v1/predict (JSON + URL фото)
 
 ```json
 {
@@ -99,17 +137,36 @@ X-API-Key: ваш_ключ
 
 ---
 
+## Деплой через Docker
+
+```bash
+git clone https://github.com/WorDem125/airsoft-ml-api.git
+cd airsoft-ml-api
+
+cp .env.example .env
+# Вставить API ключ в .env
+
+docker compose up -d --build
+curl http://localhost:8000/api/v1/health
+# Документация: http://localhost:8000/docs
+```
+
+Образ использует CPU-версию PyTorch (`torch==2.5.1+cpu`, ~800 МБ).
+Минимум сервера: **1 vCPU / 2 ГБ RAM**.
+
+---
+
 ## Локальный запуск
 
 ```bash
-git clone https://github.com/your/airsoft-ml-api.git
-cd airsoft-ml-api
+python3 -m venv .venv && source .venv/bin/activate   # Linux/Mac
+# .venv\Scripts\activate                              # Windows
 
-python3 -m venv .venv && source .venv/bin/activate
+pip install torch==2.5.1+cpu torchvision==0.20.1+cpu --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 
 cp .env.example .env
-python scripts/generate_api_key.py   # скопировать ключ в .env
+# Вставить API ключ в .env
 
 uvicorn src.api.main:app --reload
 # Документация: http://localhost:8000/docs
@@ -117,28 +174,25 @@ uvicorn src.api.main:app --reload
 
 ---
 
-## Деплой через Docker
-
-```bash
-docker compose up -d
-curl http://localhost:8000/api/v1/health
-```
-
-Образ использует CPU-версию PyTorch (~800 МБ вместо ~3 ГБ).
-Рекомендуемый минимум сервера: 1 vCPU / 1 ГБ RAM + 2 ГБ swap.
-
----
-
 ## Обучение моделей
 
 ```bash
-bash setup_venv.sh && source .venv/bin/activate
+pip install -r requirements-train.txt
 
-# Классификатор изображений (subcategory_images/dataset → models/image_classifier.pt)
-python -m training.train_image --data_dir data/raw/dataset
+# Классификатор изображений (ImageFolder-структура → models/image_classifier.pt)
+python -m training.train_image --data_dir data/raw/dataset --epochs 60 --batch_size 16
 
 # Классификатор текста (posts.parquet → models/text_classifier/)
 python -m training.train_text --data_path data/raw/posts.parquet
+```
+
+Структура датасета изображений:
+```
+data/raw/dataset/
+├── ak/
+├── pistol/
+├── helmet/
+└── ...
 ```
 
 ---
@@ -173,17 +227,17 @@ airsoft-ml-api/
 │       ├── object_extractor.py  # Извлечение объектов из текста
 │       └── config.py            # Словарь ключевых слов и маппинг
 ├── tests/
-│   ├── test_object_extractor.py # 15 unit-тестов
-│   ├── test_predictor_merge.py  # 7 тестов логики объединения
-│   └── test_api.py              # Интеграционные тесты API
 ├── training/
 │   ├── train_image.py           # Обучение EfficientNet-B0
 │   └── train_text.py            # Дообучение rubert-tiny2
 ├── scripts/
 │   ├── generate_api_key.py
-│   └── test_api.py              # Сквозное тестирование живого API
-├── models/                      # Веса моделей (Git LFS)
-├── Dockerfile                   # CPU-only PyTorch
+│   └── test_api.py
+├── models/                      # Веса моделей
+│   ├── image_classifier.pt      # EfficientNet-B0 (16 МБ)
+│   ├── image_classes.json
+│   └── text_classifier/         # rubert-tiny2 (~111 МБ)
+├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
 ├── requirements-train.txt
