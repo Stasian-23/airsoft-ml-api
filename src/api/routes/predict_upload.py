@@ -34,6 +34,33 @@ _MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 МБ
         "в поле **photos** (multipart/form-data).\n\n"
         "Поддерживаемые форматы: JPEG, PNG, WebP. Максимальный размер файла: 10 МБ."
     ),
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "multipart/form-data": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["post_id"],
+                        "properties": {
+                            "post_id": {
+                                "type": "string",
+                                "description": "Идентификатор объявления, например: post-001",
+                            },
+                            "text": {
+                                "type": "string",
+                                "description": "Текст объявления (необязательно, но рекомендуется)",
+                            },
+                            "photos": {
+                                "type": "array",
+                                "items": {"type": "string", "format": "binary"},
+                                "description": "Файлы изображений (до 10 штук, JPEG/PNG/WebP)",
+                            },
+                        },
+                    }
+                }
+            }
+        }
+    },
 )
 async def predict_upload(
     request: Request,
